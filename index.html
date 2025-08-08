@@ -10,7 +10,7 @@
 <body>
   <main id="app" class="app">
     <header class="hud" role="banner">
-      <div class="hud__left">Score: <strong id="score">0</strong></div>
+      <div class="hud__left">Score: <strong id="score">0</strong> <span id="version" class="version">v0.7.2</span></div>
       <div class="hud__center">Lives: <strong id="lives">3</strong></div>
       <div class="hud__right">Level: <strong id="level">1</strong></div>
     </header>
@@ -18,10 +18,10 @@
     <section id="board-wrap" class="board-wrap" aria-label="Game area">
       <div id="board" class="board" role="grid" aria-live="off" aria-label="11 by 11 game board"></div>
 
-      <div id="overlay" class="overlay hidden" aria-live="polite">
+      <div id="overlay" class="overlay" aria-live="polite">
         <div class="overlay__card">
           <h1 id="overlay-title">Froggo</h1>
-          <p id="overlay-sub">Press Enter or Tap Start</p>
+          <p id="overlay-sub">Tap Start (or anywhere) to play</p>
           <div class="overlay__buttons">
             <button id="btn-start" class="btn">Start</button>
             <button id="btn-restart" class="btn hidden">Restart</button>

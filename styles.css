@@ -36,6 +36,8 @@ body {
 .hud__center { text-align: center; }
 .hud__right { text-align: right; }
 
+.version { opacity: 0.8; font-weight: 600; margin-left: 8px; font-size: 0.9em; }
+
 .board-wrap {
   display: grid;
   place-items: center;
@@ -57,6 +59,7 @@ body {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.45);
   background: #0a0c12 url('Resources/board-bg.svg') center/cover no-repeat;
+  overflow: hidden;
 }
 
 /* Cells */
@@ -88,13 +91,14 @@ body {
   background-size: contain;
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  z-index: 2;
 }
-.cell.frog::after { background-image: url('Resources/frog.svg'); }
-.cell.car::after  { background-image: url('Resources/car.svg'); }
-.cell.log::after  { background-image: url('Resources/log.svg'); }
+.cell.frog::after { background-image: url('Resources/frog.svg'); transform: translateX(var(--frog-shift, 0px)); will-change: transform; }
+.cell.car::after  { background-image: url('Resources/car.svg'); transform: translateX(var(--lane-shift, 0px)); will-change: transform; }
+.cell.log::after  { background-image: url('Resources/log.svg'); transform: translateX(var(--lane-shift, 0px)); will-change: transform; }
 
 /* Overlay */
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,7,12,0.55); backdrop-filter: blur(2px); }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,7,12,0.55); backdrop-filter: blur(2px); z-index: 20; touch-action: manipulation; }
 .overlay.hidden { display: none; }
 .overlay__card {
   background: #141923;

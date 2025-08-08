@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Froggo (11×11)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="game.js"></script>
+</head>
+<body>
+  <main id="app" class="app">
+    <header class="hud" role="banner">
+      <div class="hud__left">Score: <strong id="score">0</strong></div>
+      <div class="hud__center">Lives: <strong id="lives">3</strong></div>
+      <div class="hud__right">Level: <strong id="level">1</strong></div>
+    </header>
+
+    <section id="board-wrap" class="board-wrap" aria-label="Game area">
+      <div id="board" class="board" role="grid" aria-live="off" aria-label="11 by 11 game board"></div>
+
+      <!-- Overlays -->
+      <div id="overlay" class="overlay hidden" aria-live="polite">
+        <div class="overlay__card">
+          <h1 id="overlay-title">Froggo</h1>
+          <p id="overlay-sub">Press Enter or Tap Start</p>
+          <div class="overlay__buttons">
+            <button id="btn-start" class="btn">Start</button>
+            <button id="btn-restart" class="btn hidden">Restart</button>
+            <button id="btn-continue" class="btn hidden">Continue</button>
+          </div>
+          <p class="best">Best: <span id="best-score">0</span></p>
+          <p class="hint">Arrows / WASD • Swipe • D-pad</p>
+        </div>
+      </div>
+
+      <button id="btn-pause" class="btn btn--pause" aria-label="Pause (P)">II</button>
+    </section>
+
+    <nav class="dpad" aria-label="D-pad">
+      <button class="dpad__btn dpad__btn--up" data-dir="up" aria-label="Up">↑</button>
+      <button class="dpad__btn dpad__btn--left" data-dir="left" aria-label="Left">←</button>
+      <button class="dpad__btn dpad__btn--right" data-dir="right" aria-label="Right">→</button>
+      <button class="dpad__btn dpad__btn--down" data-dir="down" aria-label="Down">↓</button>
+    </nav>
+  </main>
+</body>
+</html>

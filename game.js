@@ -1,4 +1,4 @@
-/* game.js - v0.7.2 Mobile-friendly Start overlay + smooth lanes + instant visual log lock */
+/* game.js - v0.7.4: exact log riding rules + mobile start overlay + version in HUD */
 (() => {
   const W = 11, H = 11;
   const boardEl = document.getElementById('board');
@@ -16,7 +16,6 @@
   const dpadButtons = document.querySelectorAll('.dpad__btn');
   const bestEl = document.getElementById('best-score');
 
-  const VERSION = 'v0.7.2';
   const TICK_MS = 150;
   const START_POS = { x: 5, y: 10 };
   const HOME_SLOTS_X = [1, 3, 5, 7, 9];
@@ -43,7 +42,7 @@
   ensureCells();
 
   function makeLanes(baseSpeedMod = 0) {
-    const s = (v) => Math.max(1, v - baseSpeedMod); // ticks per move
+    const s = (v) => Math.max(1, v - baseSpeedMod);
     return [
       { type: 'home' },
       { type: 'river', dir:  1, speed: s(4), length: 3, spawn: [1, 7] },
@@ -60,7 +59,6 @@
   }
 
   let lanes, frog, lives, level, score, state, homesFilled, maxProgressY;
-  let lastAlpha = 0; // store last alpha for visual-attach tests
   let best = Number(localStorage.getItem('froggo-best') || 0);
   if (bestEl) bestEl.textContent = best;
 
@@ -93,20 +91,20 @@
       overlaySubEl.textContent = 'Life lost';
       btnContinue.classList.remove('hidden');
       overlayEl.classList.remove('hidden');
-      navigator.vibrate?.(80);
+      if (navigator.vibrate) navigator.vibrate(80);
     } else if (next === STATE.GAME_OVER) {
       overlayTitleEl.textContent = 'Game Over';
       overlaySubEl.textContent = `Score: ${score}`;
       btnRestart.classList.remove('hidden');
       overlayEl.classList.remove('hidden');
-      if (score > best) { best = score; localStorage.setItem('froggo-best', String(best)); bestEl && (bestEl.textContent = best); }
-      navigator.vibrate?.([60,60,120]);
+      if (score > best) { best = score; localStorage.setItem('froggo-best', String(best)); if (bestEl) bestEl.textContent = best; }
+      if (navigator.vibrate) navigator.vibrate([60,60,120]);
     } else if (next === STATE.WIN) {
       overlayTitleEl.textContent = 'Level Clear!';
       overlaySubEl.textContent = `Level ${level} complete`;
       btnContinue.classList.remove('hidden');
       overlayEl.classList.remove('hidden');
-      navigator.vibrate?.([50,40,50]);
+      if (navigator.vibrate) navigator.vibrate([50,40,50]);
     } else if (next === STATE.PAUSED) {
       overlayTitleEl.textContent = 'Paused';
       overlaySubEl.textContent = 'Tap Continue';
@@ -127,86 +125,73 @@
     setState(STATE.PLAYING);
   }
 
+  function isOnSegment(x,start,length){ return ((x - start + W) % W) < length; }
+  function isLogAt(x,y){
+    const L = lanes[y];
+    if (!L || L.type !== 'river') return false;
+    for (const log of L.items) if (isOnSegment(x, log.x, log.length)) return true;
+    return false;
+  }
+
   (function init(){
     initLanes(0);
     frog={...START_POS}; lives=3; level=1; score=0; homesFilled=HOME_SLOTS_X.map(()=>false); maxProgressY=START_POS.y;
     setState(STATE.TITLE);
   })();
 
-  function onLogVisual(x, y, alpha) {
-    const L = lanes[y];
-    if (!L || L.type !== 'river') return false;
-    const frac = (L.ticks + alpha) / L.speed; // 0..1
-    for (const log of L.items) {
-      for (let k=0;k<log.length;k++) {
-        const base = (log.x + k + W) % W;
-        if (x === base) return true;
-        // neighbor in movement direction visually overlaps due to transform
-        const neighbor = (base + L.dir + W) % W;
-        if (x === neighbor) return true;
-      }
-    }
-    return false;
-  }
-
   function tick(){
-    // Move items one cell per movement tick (strictly linear, lane dir)
-    for(let y=0;y<H;y++){
-      const L=lanes[y];
-      if(L.type!=='road'&&L.type!=='river') continue;
-      if(++L.ticks>=L.speed){
-        L.ticks=0;
-        for(const item of L.items){ item.x=(item.x+L.dir+W)%W; }
-      }
+  // 1) Move moving objects and record which lanes moved this tick
+  for (let y = 0; y < H; y++) {
+    const L = lanes[y];
+    L.moved = false; // new flag
+    if (L.type !== 'road' && L.type !== 'river') continue;
+    if (++L.ticks >= L.speed) {
+      L.ticks = 0;
+      L.moved = true; // mark lane moved this tick
+      for (const item of L.items) item.x = (item.x + L.dir + W) % W;
     }
-
-    // Carry frog with log after logs move
-    const laneF=lanes[frog.y];
-    if(laneF&&laneF.type==='river'){
-      let onLog=false; 
-      for(const log of laneF.items){ 
-        for (let k=0;k<log.length;k++){
-          const base=(log.x+k+W)%W;
-          if(((frog.x-base+W)%W)<1){ onLog=true; break; }
-        }
-        if(onLog) break;
-      }
-      if(onLog){ frog.x=(frog.x+laneF.dir+W)%W; }
-    }
-
-    // Collisions / drown
-    if(laneF){
-      if(laneF.type==='road'){
-        for(const car of laneF.items){ if(((frog.x-car.x+W)%W)<car.length) return loseLife(); }
-      } else if(laneF.type==='river'){
-        let onAny=false; 
-        for(const log of laneF.items){ 
-          for (let k=0;k<log.length;k++){
-            const base=(log.x+k+W)%W;
-            if(((frog.x-base+W)%W)<1){ onAny=true; break; }
-          }
-          if(onAny) break;
-        }
-        if(!onAny) return loseLife();
-      }
-    }
-
-    // Home row
-    if(frog.y===0){
-      const i=HOME_SLOTS_X.indexOf(frog.x);
-      if(i>=0&&!homesFilled[i]){ homesFilled[i]=true; score+=50; if(homesFilled.every(Boolean)) setState(STATE.WIN); else resetFrog(); }
-      else { loseLife(); }
-      return;
-    }
-
-    // Progress score
-    if(frog.y<maxProgressY){ score+=10; maxProgressY=frog.y; }
   }
+
+  // 2) Carry frog if (and only if) the frog’s river lane moved this tick
+  const laneF = lanes[frog.y];
+  if (laneF && laneF.type === 'river' && laneF.moved) {
+    if (isLogAt(frog.x, frog.y)) {
+      const newX = frog.x + laneF.dir;
+      if (newX < 0 || newX >= W) { loseLife(); return; } // slide off = death
+      frog.x = newX;
+    }
+  }
+
+  // 3) Water death after (possible) carry
+  if (laneF && laneF.type === 'river') {
+    if (!isLogAt(frog.x, frog.y)) { loseLife(); return; }
+  }
+
+  // 4) Road collisions
+  if (laneF && laneF.type === 'road') {
+    for (const car of laneF.items) {
+      if (isOnSegment(frog.x, car.x, car.length)) { loseLife(); return; }
+    }
+  }
+
+  // 5) Home slots
+  if (frog.y === 0) {
+    const i = HOME_SLOTS_X.indexOf(frog.x);
+    if (i >= 0 && !homesFilled[i]) {
+      homesFilled[i] = true; score += 50;
+      if (homesFilled.every(Boolean)) setState(STATE.WIN); else resetFrog();
+    } else { loseLife(); }
+    return;
+  }
+
+  // 6) Progress
+  if (frog.y < maxProgressY) { score += 10; maxProgressY = frog.y; }
+}
+
 
   function loseLife(){ lives--; setState((lives<=0)?STATE.GAME_OVER:STATE.LIFE_LOST); }
 
   function render(alpha) {
-    // HUD
     scoreEl.textContent = String(score);
     livesEl.textContent = String(lives);
     levelEl.textContent = String(level);
@@ -223,28 +208,24 @@
       }
     }
 
-    // Per-lane smooth shift (pixels) based on fractional progress toward next cell
     const cellPx = boardEl.clientWidth / W;
     const laneShift = new Array(H).fill(0);
     for (let y=0; y<H; y++) {
       const L = lanes[y];
       let shift = 0;
       if (L.type==='road' || L.type==='river') {
-        const progress = ((L.ticks) + alpha) / L.speed; // 0..1 toward next move
+        const progress = ((L.ticks) + alpha) / Math.max(1, L.speed);
         shift = progress * L.dir * cellPx;
       }
       laneShift[y] = shift;
-      for (let x=0; x<W; x++) {
-        cells[idx(x,y)].style.setProperty('--lane-shift', shift+'px');
-      }
+      for (let x=0; x<W; x++) cells[idx(x,y)].style.setProperty('--lane-shift', shift+'px');
     }
 
-    // Paint cells/classes
     for(let y=0;y<H;y++){
       for(let x=0;x<W;x++){
         const L=lanes[y]; let cls='cell ';
         if(L.type==='home'){
-          const filled=HOME_SLOTS_X.includes(x)&&homesFilled[HOME_SLOTS_X.indexOf(x)];
+          const filled = HOME_SLOTS_X.includes(x) && homesFilled[HOME_SLOTS_X.indexOf(x)];
           cls+='home'+(filled?' home--filled':'');
         } else cls+=(L.type||'grass');
         if(carMap[y][x]) cls+=' car';
@@ -254,28 +235,18 @@
       }
     }
 
-    // Smooth carry for frog riding a log: translate frog by lane shift if on/overlapping a log visually
     let frogShift = 0;
-    if (onLogVisual(frog.x, frog.y, alpha)) {
-      frogShift = laneShift[frog.y];
-    }
+    if (lanes[frog.y]?.type === 'river' && logMap[frog.y]?.[frog.x]) frogShift = laneShift[frog.y];
     cells[idx(frog.x,frog.y)].style.setProperty('--frog-shift', frogShift+'px');
-
-    lastAlpha = alpha;
   }
 
-  function tryMove(dx,dy){ 
-    if(state!==STATE.PLAYING) return; 
-    frog.x=Math.max(0,Math.min(W-1,frog.x+dx)); 
-    frog.y=Math.max(0,Math.min(H-1,frog.y+dy)); 
-    // If we landed in river, visually attach immediately if overlapping a log this frame
-    if (lanes[frog.y]?.type==='river') {
-      // touching is handled visually in render via onLogVisual; nothing else needed here for visuals
-      // (carrying as integer x happens in tick)
-    }
+  function tryMove(dx,dy){
+    if(state!==STATE.PLAYING) return;
+    const nx = Math.max(0, Math.min(W-1, frog.x+dx));
+    const ny = Math.max(0, Math.min(H-1, frog.y+dy));
+    frog.x = nx; frog.y = ny;
   }
 
-  // Keyboard
   window.addEventListener('keydown',e=>{
     const k=e.key.toLowerCase();
     if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key)) e.preventDefault();
@@ -288,7 +259,6 @@
     else if(k==='arrowright'||k==='d')tryMove(1,0);
   },{passive:false});
 
-  // Buttons (mobile-friendly)
   btnStart?.addEventListener('click', startNewGame);
   btnRestart?.addEventListener('click', startNewGame);
   btnContinue?.addEventListener('click', () => {
@@ -296,42 +266,44 @@
     else if (state === STATE.WIN) { nextLevel(); }
     else if (state === STATE.PAUSED) { setState(STATE.PLAYING); }
   });
-  btnPause?.addEventListener('click', () => {
-    setState(state === STATE.PLAYING ? STATE.PAUSED : STATE.PLAYING);
-  });
-  // Tap anywhere on overlay to start
+  btnPause?.addEventListener('click', () => { setState(state === STATE.PLAYING ? STATE.PAUSED : STATE.PLAYING); });
   overlayEl.addEventListener('click', () => { if (state===STATE.TITLE) startNewGame(); });
 
-  // D-pad one-step (with optional hold repeat)
+  // D-pad
   let repeatTimer=null;
   function handleDir(dir){ if(dir==='up')tryMove(0,-1); else if(dir==='down')tryMove(0,1); else if(dir==='left')tryMove(-1,0); else if(dir==='right')tryMove(1,0); }
   dpadButtons.forEach(btn=>{
-    btn.addEventListener('pointerdown',(e)=>{ e.preventDefault(); const dir=btn.dataset.dir; handleDir(dir); btn.setPointerCapture(e.pointerId); clearInterval(repeatTimer); repeatTimer=setInterval(()=>handleDir(dir),170); },{passive:false});
+    btn.addEventListener('pointerdown',(e)=>{ e.preventDefault(); const dir=btn.dataset.dir; handleDir(dir); btn.setPointerCapture(e.pointerId); 
+      clearInterval(repeatTimer); repeatTimer=setInterval(()=>handleDir(dir),170); },{passive:false});
     const stop=()=>{ clearInterval(repeatTimer); };
     btn.addEventListener('pointerup',stop); btn.addEventListener('pointercancel',stop); btn.addEventListener('pointerleave',stop);
   });
 
-  // Swipe: single-finger, one move, ignore diagonals
+  // Swipe
   let swipeActive=false, startX=0, startY=0, ptrId=null, moved=false;
   boardWrap.addEventListener('pointerdown',(e)=>{
     if(e.pointerType!=='touch') return; if(swipeActive) return; swipeActive=true; moved=false; ptrId=e.pointerId; startX=e.clientX; startY=e.clientY; e.preventDefault(); boardWrap.setPointerCapture(ptrId);
   },{passive:false});
   boardWrap.addEventListener('pointermove',(e)=>{ if(!swipeActive||e.pointerId!==ptrId) return; e.preventDefault(); },{passive:false});
   boardWrap.addEventListener('pointerup',(e)=>{
-    if(!swipeActive||e.pointerId!==ptrId) return; const dx=e.clientX-startX, dy=e.clientY-startY; const ax=Math.abs(dx), ay=Math.abs(dy);
-    if(!moved){ if(ax>=28 && ay<28){ handleDir(dx>0?'right':'left'); moved=true; } else if(ay>=28 && ax<28){ handleDir(dy>0?'down':'up'); moved=true; } }
-    try{ boardWrap.releasePointerCapture(ptrId); }catch{}
+    if(!swipeActive||e.pointerId!==ptrId) return;
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    const ax=Math.abs(dx), ay=Math.abs(dy);
+    if(!moved){
+      if(ax>=28 && ay<28){ handleDir(dx>0?'right':'left'); moved=true; }
+      else if(ay>=28 && ax<28){ handleDir(dy>0?'down':'up'); moved=true; }
+    }
+    try{ boardWrap.releasePointerCapture(ptrId); }catch(e){}
     swipeActive=false; ptrId=null; e.preventDefault();
   },{passive:false});
 
-  // Fixed-step loop
   let last=0, acc=0;
   function loop(ts){
     if(!last) last=ts;
     acc += ts - last;
     last = ts;
     while(acc >= TICK_MS){ if(state===STATE.PLAYING) tick(); acc -= TICK_MS; }
-    const alpha = acc / TICK_MS; // 0..1 fraction of next tick
+    const alpha = acc / TICK_MS;
     render(alpha);
     requestAnimationFrame(loop);
   }
